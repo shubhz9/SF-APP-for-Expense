@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Allocation of a cashflow to individual asset participants.</description>
+    <enableActivities>false</enableActivities>
+    <enableHistory>false</enableHistory>
+    <label>Cashflow Allocation</label>
+    <pluralLabel>Cashflow Allocations</pluralLabel>
+    <nameField>
+        <label>Cashflow Allocation Name</label>
+        <type>Text</type>
+    </nameField>
+    <sharingModel>Private</sharingModel>
+
+    <fields>
+        <fullName>Cashflow__c</fullName>
+        <description>Cashflow that is being allocated.</description>
+        <externalId>false</externalId>
+        <label>Cashflow</label>
+        <referenceTo>Cashflow__c</referenceTo>
+        <relationshipLabel>Cashflow Allocations</relationshipLabel>
+        <relationshipName>Cashflow_Allocations</relationshipName>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Lookup</type>
+    </fields>
+
+    <fields>
+        <fullName>Asset_Participant__c</fullName>
+        <description>Participant receiving this allocation.</description>
+        <externalId>false</externalId>
+        <label>Asset Participant</label>
+        <referenceTo>Asset_Participant__c</referenceTo>
+        <relationshipLabel>Participant Allocations</relationshipLabel>
+        <relationshipName>Participant_Allocations</relationshipName>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Lookup</type>
+    </fields>
+
+    <fields>
+        <fullName>Allocation_Type__c</fullName>
+        <description>Type of allocation.</description>
+        <externalId>false</externalId>
+        <label>Allocation Type</label>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>Equity_Contribution</fullName>
+                    <default>false</default>
+                    <label>Equity Contribution</label>
+                </value>
+                <value>
+                    <fullName>Loan_Payment</fullName>
+                    <default>false</default>
+                    <label>Loan Payment</label>
+                </value>
+                <value>
+                    <fullName>Income_Share</fullName>
+                    <default>false</default>
+                    <label>Income Share</label>
+                </value>
+                <value>
+                    <fullName>Expense_Share</fullName>
+                    <default>false</default>
+                    <label>Expense Share</label>
+                </value>
+                <value>
+                    <fullName>Profit_Share</fullName>
+                    <default>false</default>
+                    <label>Profit Share</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+
+    <fields>
+        <fullName>Allocation_Percentage__c</fullName>
+        <description>Percentage allocation of this cashflow to the participant.</description>
+        <externalId>false</externalId>
+        <label>Allocation Percentage</label>
+        <precision>5</precision>
+        <scale>2</scale>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Percent</type>
+    </fields>
+
+    <fields>
+        <fullName>Allocated_Amount__c</fullName>
+        <description>Allocated amount for this participant.</description>
+        <externalId>false</externalId>
+        <label>Allocated Amount</label>
+        <precision>16</precision>
+        <scale>2</scale>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Currency</type>
+    </fields>
+
+</CustomObject>
