@@ -1,0 +1,92 @@
+<template>
+    <template if:true={assetSummary}>
+        <lightning-card title="Shared Asset Summary" icon-name="custom:custom70">
+            <div class="slds-p-around_medium">
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2 slds-p-around_small">
+                        <p class="slds-text-heading_small">{assetSummary.assetName}</p>
+                        <p class="slds-text-body_small slds-m-top_x-small">
+                            Total Cost: {assetSummary.totalCost}
+                        </p>
+                        <p class="slds-text-body_small">
+                            Equity Contributed: {assetSummary.totalEquity}
+                        </p>
+                        <p class="slds-text-body_small">
+                            Loan Taken: {assetSummary.totalLoanTaken}
+                        </p>
+                        <p class="slds-text-body_small">
+                            Outstanding Loan: {assetSummary.outstandingLoan}
+                        </p>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-p-around_small">
+                        <p class="slds-text-heading_small">Cashflow</p>
+                        <p class="slds-text-body_small slds-m-top_x-small">
+                            Total Income: {assetSummary.totalIncome}
+                        </p>
+                        <p class="slds-text-body_small">
+                            Total Expenses: {assetSummary.totalExpenses}
+                        </p>
+                        <p class="slds-text-body_small slds-m-top_x-small slds-text-title_caps">
+                            Net Cashflow: {assetSummary.netCashflow}
+                        </p>
+                    </div>
+                </div>
+
+                <hr class="slds-m-vertical_medium" />
+
+                <p class="slds-text-heading_small slds-m-bottom_small">
+                    Participants
+                </p>
+
+                <div class="slds-scrollable_x">
+                    <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                        <thead>
+                            <tr class="slds-text-title_caps">
+                                <th scope="col">Name</th>
+                                <th scope="col">Ownership %</th>
+                                <th scope="col">Loan Share %</th>
+                                <th scope="col">Equity</th>
+                                <th scope="col">Loan Paid</th>
+                                <th scope="col">Income</th>
+                                <th scope="col">Expense</th>
+                                <th scope="col">Net Position</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={assetSummary.participants} for:item="p">
+                                <tr key={p.id}>
+                                    <td>{p.name}</td>
+                                    <td>{p.ownershipPercentage}</td>
+                                    <td>{p.loanSharePercentage}</td>
+                                    <td>{p.totalEquity}</td>
+                                    <td>{p.totalLoanPaid}</td>
+                                    <td>{p.totalIncome}</td>
+                                    <td>{p.totalExpense}</td>
+                                    <td>{p.netPosition}</td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </lightning-card>
+    </template>
+
+    <template if:true={error}>
+        <lightning-card title="Shared Asset Summary">
+            <div class="slds-p-around_medium">
+                <p class="slds-text-color_error">
+                    {error}
+                </p>
+            </div>
+        </lightning-card>
+    </template>
+
+    <template if:true={isLoading}>
+        <lightning-card title="Shared Asset Summary">
+            <div class="slds-p-around_medium">
+                <lightning-spinner alternative-text="Loading asset summary"></lightning-spinner>
+            </div>
+        </lightning-card>
+    </template>
+</template>
