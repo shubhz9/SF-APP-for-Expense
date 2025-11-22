@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Cashflow entries for a shared asset (contributions, EMIs, income, expenses, etc.).</description>
+    <enableActivities>false</enableActivities>
+    <enableHistory>false</enableHistory>
+    <label>Cashflow</label>
+    <pluralLabel>Cashflows</pluralLabel>
+    <nameField>
+        <label>Cashflow Name</label>
+        <type>Text</type>
+    </nameField>
+    <sharingModel>Private</sharingModel>
+
+    <fields>
+        <fullName>Shared_Asset__c</fullName>
+        <description>Asset that this cashflow relates to.</description>
+        <externalId>false</externalId>
+        <label>Shared Asset</label>
+        <referenceTo>Shared_Asset__c</referenceTo>
+        <relationshipLabel>Cashflows</relationshipLabel>
+        <relationshipName>Cashflows</relationshipName>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Lookup</type>
+    </fields>
+
+    <fields>
+        <fullName>Loan__c</fullName>
+        <description>Related loan, if this cashflow is loan-related (e.g. EMI).</description>
+        <externalId>false</externalId>
+        <label>Loan</label>
+        <referenceTo>Loan__c</referenceTo>
+        <relationshipLabel>Loan Cashflows</relationshipLabel>
+        <relationshipName>Loan_Cashflows</relationshipName>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Lookup</type>
+    </fields>
+
+    <fields>
+        <fullName>Entered_By__c</fullName>
+        <description>User who entered this cashflow.</description>
+        <externalId>false</externalId>
+        <label>Entered By</label>
+        <referenceTo>User</referenceTo>
+        <relationshipLabel>User Cashflows</relationshipLabel>
+        <relationshipName>User_Cashflows</relationshipName>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Lookup</type>
+    </fields>
+
+    <fields>
+        <fullName>Type__c</fullName>
+        <description>Type of cashflow.</description>
+        <externalId>false</externalId>
+        <label>Type</label>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>Contribution</fullName>
+                    <default>false</default>
+                    <label>Contribution</label>
+                </value>
+                <value>
+                    <fullName>Loan_Repayment</fullName>
+                    <default>false</default>
+                    <label>Loan Repayment</label>
+                </value>
+                <value>
+                    <fullName>Income</fullName>
+                    <default>false</default>
+                    <label>Income</label>
+                </value>
+                <value>
+                    <fullName>Expense</fullName>
+                    <default>false</default>
+                    <label>Expense</label>
+                </value>
+                <value>
+                    <fullName>Sale_Proceeds</fullName>
+                    <default>false</default>
+                    <label>Sale Proceeds</label>
+                </value>
+                <value>
+                    <fullName>Adjustment</fullName>
+                    <default>true</default>
+                    <label>Adjustment</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+
+    <fields>
+        <fullName>Amount__c</fullName>
+        <description>Amount of this cashflow.</description>
+        <externalId>false</externalId>
+        <label>Amount</label>
+        <precision>16</precision>
+        <scale>2</scale>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Currency</type>
+    </fields>
+
+    <fields>
+        <fullName>Cashflow_Date__c</fullName>
+        <description>Date of the cashflow.</description>
+        <externalId>false</externalId>
+        <label>Cashflow Date</label>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+
+    <fields>
+        <fullName>Description__c</fullName>
+        <description>Description / notes about the cashflow.</description>
+        <externalId>false</externalId>
+        <label>Description</label>
+        <length>32768</length>
+        <visibleLines>3</visibleLines>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>LongTextArea</type>
+    </fields>
+
+</CustomObject>
