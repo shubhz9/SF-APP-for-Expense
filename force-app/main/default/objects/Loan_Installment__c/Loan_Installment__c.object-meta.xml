@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Individual loan installments (EMIs).</description>
+    <enableActivities>false</enableActivities>
+    <enableHistory>false</enableHistory>
+    <label>Loan Installment</label>
+    <pluralLabel>Loan Installments</pluralLabel>
+    <nameField>
+        <label>Loan Installment Name</label>
+        <type>Text</type>
+    </nameField>
+    <sharingModel>Private</sharingModel>
+
+    <fields>
+        <fullName>Loan__c</fullName>
+        <description>Loan that this installment belongs to.</description>
+        <externalId>false</externalId>
+        <label>Loan</label>
+        <referenceTo>Loan__c</referenceTo>
+        <relationshipLabel>Loan Installments</relationshipLabel>
+        <relationshipName>Loan_Installments</relationshipName>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Lookup</type>
+    </fields>
+
+    <fields>
+        <fullName>Installment_Date__c</fullName>
+        <description>Planned or actual date of installment.</description>
+        <externalId>false</externalId>
+        <label>Installment Date</label>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+
+    <fields>
+        <fullName>Installment_Amount__c</fullName>
+        <description>Total installment amount.</description>
+        <externalId>false</externalId>
+        <label>Installment Amount</label>
+        <precision>16</precision>
+        <scale>2</scale>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Currency</type>
+    </fields>
+
+    <fields>
+        <fullName>Principal_Component__c</fullName>
+        <description>Principal component of the installment.</description>
+        <externalId>false</externalId>
+        <label>Principal Component</label>
+        <precision>16</precision>
+        <scale>2</scale>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Currency</type>
+    </fields>
+
+    <fields>
+        <fullName>Interest_Component__c</fullName>
+        <description>Interest component of the installment.</description>
+        <externalId>false</externalId>
+        <label>Interest Component</label>
+        <precision>16</precision>
+        <scale>2</scale>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Currency</type>
+    </fields>
+
+    <fields>
+        <fullName>Status__c</fullName>
+        <description>Status of the installment.</description>
+        <externalId>false</externalId>
+        <label>Status</label>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>Planned</fullName>
+                    <default>true</default>
+                    <label>Planned</label>
+                </value>
+                <value>
+                    <fullName>Paid</fullName>
+                    <default>false</default>
+                    <label>Paid</label>
+                </value>
+                <value>
+                    <fullName>Missed</fullName>
+                    <default>false</default>
+                    <label>Missed</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+
+    <fields>
+        <fullName>Paid_From_Source__c</fullName>
+        <description>Source from which this installment was paid.</description>
+        <externalId>false</externalId>
+        <label>Paid From Source</label>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>Bank</fullName>
+                    <default>true</default>
+                    <label>Bank</label>
+                </value>
+                <value>
+                    <fullName>Asset_Income</fullName>
+                    <default>false</default>
+                    <label>Asset Income</label>
+                </value>
+                <value>
+                    <fullName>Owner_Contribution</fullName>
+                    <default>false</default>
+                    <label>Owner Contribution</label>
+                </value>
+                <value>
+                    <fullName>Other</fullName>
+                    <default>false</default>
+                    <label>Other</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+
+</CustomObject>
