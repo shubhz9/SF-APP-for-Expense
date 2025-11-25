@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Tab for Asset Participant records.</description>
-    <label>Asset Participants</label>
-    <motif>Custom64: Group</motif>
-    <sobjectName>Asset_Participant__c</sobjectName>
-</CustomTab>

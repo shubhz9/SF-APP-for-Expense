@@ -1,51 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
-        <!-- Custom Objects -->
-        <members>Shared_Asset__c</members>
-        <members>Asset_Participant__c</members>
-        <members>Loan__c</members>
-        <members>Loan_Installment__c</members>
-        <members>Cashflow__c</members>
-        <members>Cashflow_Allocation__c</members>
-        <name>CustomObject</name>
-    </types>
-    <types>
-        <!-- Custom Tabs -->
-        <members>Shared_Asset__c</members>
-        <members>Asset_Participant__c</members>
-        <members>Loan__c</members>
-        <members>Loan_Installment__c</members>
-        <members>Cashflow__c</members>
-        <members>Cashflow_Allocation__c</members>
-        <name>CustomTab</name>
-    </types>
-    <types>
-        <!-- Lightning App -->
-        <members>Shared_Asset_App</members>
-        <name>CustomApplication</name>
-    </types>
-    <types>
-        <!-- Permission Set -->
-        <members>Shared_Asset_App_Permissions</members>
-        <name>PermissionSet</name>
-    </types>
-    <types>
-        <!-- Apex classes -->
-        <members>CashflowAllocationService</members>
-        <members>SharedAssetDashboardController</members>
+        <members>*</members>
         <name>ApexClass</name>
-    </types>
-    <types>
-        <!-- Lightning Web Components -->
-        <members>cashflowQuickEntry</members>
-        <members>sharedAssetDashboard</members>
-        <name>LightningComponentBundle</name>
-    </types>
-    <types>
-        <!-- Flows -->
-        <members>Cashflow_Auto_Allocation</members>
-        <name>Flow</name>
     </types>
     <version>60.0</version>
 </Package>

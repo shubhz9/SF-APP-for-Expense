@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Tab for Loan Installment (EMI) records.</description>
-    <label>Loan Installments</label>
-    <motif>Custom28: Payment</motif>
-    <sobjectName>Loan_Installment__c</sobjectName>
-</CustomTab>

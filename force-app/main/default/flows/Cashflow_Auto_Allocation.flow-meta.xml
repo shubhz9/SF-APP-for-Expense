@@ -3,5 +3,5 @@
     <apiVersion>60.0</apiVersion>
     <label>Cashflow Auto Allocation</label>
     <processType>AutoLaunchedFlow</processType>
-    <status>Active</status>
+    <status>Draft</status>
 </Flow>
