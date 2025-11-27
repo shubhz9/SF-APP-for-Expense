@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customObject>true</customObject>
+    <description>Shared Asset Tab</description>
+    <label>Shared Asset</label>
+    <motif>Custom13: Box</motif>
+</CustomTab>
