@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Loan_Installment__c</fullName>
+    <label>Loan Installment</label>
+    <type>Lookup</type>
+    <referenceTo>Loan_Installment__c</referenceTo>
+    <relationshipLabel>Transactions</relationshipLabel>
+    <relationshipName>LoanInstallment_Transactions</relationshipName>
+</CustomField>
