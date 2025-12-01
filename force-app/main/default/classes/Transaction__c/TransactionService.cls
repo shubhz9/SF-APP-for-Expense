@@ -1,16 +1,26 @@
 /**
  * @description       : 
  * @author            : Shubham Raut
- * @date              : 11-27-2025
- * @last modified on  : 11-27-2025
- * @last modified by  : Shubham Raut 
+ * @date              : 12-01-2025
+ * @last modified on  : 12-01-2025
+ * @last modified by  : Shubham Raut
  * Modifications Log
  * Ver   Date         Author         Modification
  * 1.0   11-27-2025   Shubham Raut   Initial Version
 **/
-public with sharing class TransactionService {
+public with sharing class TransactionService implements IService{
 
-    // Types that should map to INWARD / OUTWARD directions
+    public interface IService{
+        void applyDirection(List<Transaction__c> newTxns);
+        void processIncomeAndReturnTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
+        void processIncomeAndReturnTransactions(List<Transaction__c> newTxns);
+    }
+
+    // --------------------------------
+    // 1. Direction based on Type__c
+    // --------------------------------
+
+    // Types treated as "money coming into" the asset
     private static final Set<String> INWARD_TYPES = new Set<String>{
         'Down_Payment',
         'Owner_Contribution',
@@ -20,6 +30,7 @@ public with sharing class TransactionService {
         'Other_Income'
     };
 
+    // Types treated as "money going out" of the asset
     private static final Set<String> OUTWARD_TYPES = new Set<String>{
         'Loan_Repayment',
         'Interest_Payment',
@@ -29,15 +40,17 @@ public with sharing class TransactionService {
         'Other_Expense'
     };
 
-    // ----------------------------
-    // Direction derivation helpers
-    // ----------------------------
-
-    public static void setDirections(List<Transaction__c> txns) {
+    /**
+     * Automation #2:
+     * Auto-set Direction__c based on Type__c.
+     * To be called in BEFORE INSERT / BEFORE UPDATE.
+     */
+    public void applyDirection(List<Transaction__c> txns) {
         if (txns == null || txns.isEmpty()) return;
 
         for (Transaction__c t : txns) {
             if (t.Type__c == null) {
+                // no type → don't touch direction
                 continue;
             }
 
@@ -46,41 +59,43 @@ public with sharing class TransactionService {
             } else if (OUTWARD_TYPES.contains(t.Type__c)) {
                 t.Direction__c = 'Outward';
             }
-            // If Type__c not in either set, leave Direction__c as-is
+            // If Type__c not in either list, leave Direction__c as-is
         }
     }
 
-    // ------------------------------------
-    // Payout generation (Income / Returns)
-    // ------------------------------------
+    // -------------------------------------------
+    // 2. Payouts for Income_From_Asset / Return
+    // -------------------------------------------
 
-    public static void generatePayoutsForNew(List<Transaction__c> newTxns) {
-        generatePayoutsInternal(newTxns, null);
-    }
-
-    public static void generatePayoutsForUpdated(
-        List<Transaction__c> newTxns,
-        Map<Id, Transaction__c> oldTxnsById
-    ) {
-        generatePayoutsInternal(newTxns, oldTxnsById);
+    /**
+     * Public entry method for AFTER INSERT.
+     * Automation #1:
+     *  - For new Return / Income_From_Asset transactions,
+     *  - Auto-create Payout__c records per active ownership.
+     */
+    public void processIncomeAndReturnTransactions(List<Transaction__c> newTxns) {
+        processIncomeAndReturnTransactions(newTxns, null);
     }
 
     /**
-     * Core payout generator:
-     * - Only for Type__c IN ('Income_From_Asset', 'Return')
-     * - Requires Shared_Asset__c and Amount__c
-     * - On update, only acts when something relevant changed
+     * Public entry method for AFTER UPDATE.
+     * Automation #1:
+     *  - Same logic as insert,
+     *  - But only re-generates payouts if relevant fields changed.
      */
-    private static void generatePayoutsInternal(
+    public void processIncomeAndReturnTransactions(
         List<Transaction__c> newTxns,
         Map<Id, Transaction__c> oldTxnsById
     ) {
         if (newTxns == null || newTxns.isEmpty()) return;
 
+        // Step 1: filter transactions that qualify
         List<Transaction__c> eligible = new List<Transaction__c>();
 
         for (Transaction__c t : newTxns) {
-            if (t.Type__c == null || t.Amount__c == null || t.Shared_Asset__c == null) {
+            if (t.Type__c == null ||
+                t.Amount__c == null ||
+                t.Shared_Asset__c == null) {
                 continue;
             }
 
@@ -92,20 +107,6 @@ public with sharing class TransactionService {
                 continue;
             }
 
-            // For updates, only re-generate payouts if something changed
-            if (oldTxnsById != null && oldTxnsById.containsKey(t.Id)) {
-                Transaction__c oldT = oldTxnsById.get(t.Id);
-
-                Boolean typeUnchanged = (oldT.Type__c == t.Type__c);
-                Boolean amountUnchanged = (oldT.Amount__c == t.Amount__c);
-                Boolean assetUnchanged = (oldT.Shared_Asset__c == t.Shared_Asset__c);
-
-                if (typeUnchanged && amountUnchanged && assetUnchanged) {
-                    // nothing relevant changed, skip
-                    continue;
-                }
-            }
-
             eligible.add(t);
         }
 
@@ -113,27 +114,17 @@ public with sharing class TransactionService {
             return;
         }
 
-        // Collect asset ids
+        // Step 2: get all related assets
         Set<Id> assetIds = new Set<Id>();
         for (Transaction__c t : eligible) {
             assetIds.add(t.Shared_Asset__c);
         }
 
-        // Query active ownership records
+        // Step 3: query active ownership per asset
         Map<Id, List<Asset_Ownership__c>> ownershipByAssetId =
             new Map<Id, List<Asset_Ownership__c>>();
 
-        for (Asset_Ownership__c own : [
-            SELECT Id,
-                   Shared_Asset__c,
-                   Owner__c,
-                   Ownership_Percentage__c,
-                   Is_Active__c
-            FROM Asset_Ownership__c
-            WHERE Shared_Asset__c IN :assetIds
-              AND Is_Active__c = true
-              AND Ownership_Percentage__c != null
-        ]) {
+        for (Asset_Ownership__c own : AssetOwnershipSelector.newInstance().selectBySharedAssets(assetIds)) {
             List<Asset_Ownership__c> bucket = ownershipByAssetId.get(own.Shared_Asset__c);
             if (bucket == null) {
                 bucket = new List<Asset_Ownership__c>();
@@ -146,8 +137,7 @@ public with sharing class TransactionService {
             return;
         }
 
-        // Optional: clean up existing payouts for these transactions before re-creating
-        // (so updates don't double-create)
+        // Step 4: if update, wipe existing payouts for these txns to avoid duplicates
         Set<Id> txnIds = new Set<Id>();
         for (Transaction__c t : eligible) {
             if (t.Id != null) {
@@ -157,13 +147,10 @@ public with sharing class TransactionService {
 
         List<Payout__c> payoutsToDelete = new List<Payout__c>();
         if (!txnIds.isEmpty()) {
-            payoutsToDelete = [
-                SELECT Id
-                FROM Payout__c
-                WHERE Transaction__c IN :txnIds
-            ];
+            payoutsToDelete = PayoutSelector.newInstance().selectByTransactionIds(txnIds);
         }
 
+        // Step 5: create new Payout__c records based on ownership %
         List<Payout__c> payoutsToInsert = new List<Payout__c>();
 
         for (Transaction__c t : eligible) {
@@ -173,24 +160,24 @@ public with sharing class TransactionService {
             }
 
             for (Asset_Ownership__c own : owners) {
-                Decimal percent = own.Ownership_Percentage__c;
-                if (percent == null) continue;
+                Decimal pct = own.Ownership_Percentage__c;
+                if (pct == null) continue;
 
-                Decimal shareAmount = (t.Amount__c * percent) / 100;
+                Decimal shareAmount = (t.Amount__c * pct) / 100;
 
                 Payout__c p = new Payout__c();
-                p.Transaction__c         = t.Id;
-                p.Owner__c               = own.Owner__c;
-                p.Ownership_Percentage__c = percent;
-                p.Amount__c              = shareAmount;
-                p.Is_Paid__c             = false;
-                // Payment_Transaction__c and Remarks__c can be filled later manually / via another process
+                p.Transaction__c          = t.Id;
+                p.Owner__c                = own.Owner__c;
+                p.Ownership_Percentage__c = pct;
+                p.Amount__c               = shareAmount;
+                p.Is_Paid__c              = false;
+                // Payment_Transaction__c, Remarks__c can be filled later
 
                 payoutsToInsert.add(p);
             }
         }
 
-        // Perform DML in bulk
+        // Step 6: DML in bulk
         if (!payoutsToDelete.isEmpty()) {
             delete payoutsToDelete;
         }

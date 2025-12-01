@@ -1,9 +1,9 @@
 /**
  * @description       : 
  * @author            : Shubham Raut
- * @date              : 11-27-2025
+ * @date              : 12-01-2025
  * @group             : ITBA
- * @last modified on  : 11-27-2025
+ * @last modified on  : 12-01-2025
  * @last modified by  : Shubham Raut
  * Modifications Log
  * Ver   Date         Author         Modification
@@ -38,10 +38,18 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
         this.validateTransactions((List<Transaction__c>) getRecords());
     }
 
+    public override void onAfterInsert(){
+
+    }
+
+    public override void onAfterUpdate(){
+        
+    }
+
     public override void onBeforeUpdate(Map<Id, SObject> existingRecords) {
         // Example: only validate when specific fields change
         
-        Set<String> changedFields = new Set<String>{ 'Amount__c' };
+        Set<String> changedFields = new Set<String>{ 'Type__c', 'Amount__c', 'Shared_Asset__c' };
         this.validateTransactions((List<Transaction__c>) getChangedRecords(changedFields));
     }
 
