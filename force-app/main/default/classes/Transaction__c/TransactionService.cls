@@ -11,8 +11,11 @@
 public with sharing class TransactionService implements IService {
     public interface IService {
         void applyDirection(List<Transaction__c> newTxns);
+        void prepareRelatedRecords(List<Transaction__c> newTxns);
         void processIncomeAndReturnTransactions(List<Transaction__c> newTxns);
         void processIncomeAndReturnTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
+        void processProfitDistributionTransactions(List<Transaction__c> newTxns);
+        void processProfitDistributionTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void refreshRelatedRollups(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void refreshRelatedRollups(List<Transaction__c> newTxns, List<Transaction__c> oldTxns);
     }
@@ -76,6 +79,15 @@ public with sharing class TransactionService implements IService {
 
     public static Boolean requiresLoan(String transactionType) {
         return LOAN_REQUIRED_TYPES.contains(transactionType);
+    }
+
+    public void prepareRelatedRecords(List<Transaction__c> txns) {
+        if (txns == null || txns.isEmpty()) {
+            return;
+        }
+
+        createAndLinkLoans(txns);
+        createAndLinkLoanInstallments(txns);
     }
 
     public void processIncomeAndReturnTransactions(List<Transaction__c> newTxns) {
@@ -168,6 +180,112 @@ public with sharing class TransactionService implements IService {
         }
         if (!payoutsToInsert.isEmpty()) {
             insert payoutsToInsert;
+        }
+    }
+
+    public void processProfitDistributionTransactions(List<Transaction__c> newTxns) {
+        processProfitDistributionTransactions(newTxns, null);
+    }
+
+    public void processProfitDistributionTransactions(
+        List<Transaction__c> newTxns,
+        Map<Id, Transaction__c> oldTxnsById
+    ) {
+        if (newTxns == null || newTxns.isEmpty()) {
+            return;
+        }
+
+        Set<Id> paymentTxnIdsToClear = new Set<Id>();
+        List<Transaction__c> eligible = new List<Transaction__c>();
+        Set<Id> assetIds = new Set<Id>();
+        Set<Id> ownerIds = new Set<Id>();
+
+        for (Transaction__c txn : newTxns) {
+            if (txn.Id == null) {
+                continue;
+            }
+
+            Boolean shouldProcess = true;
+            if (oldTxnsById != null && oldTxnsById.containsKey(txn.Id)) {
+                Transaction__c oldTxn = oldTxnsById.get(txn.Id);
+                shouldProcess =
+                    txn.Type__c != oldTxn.Type__c ||
+                    txn.Amount__c != oldTxn.Amount__c ||
+                    txn.Shared_Asset__c != oldTxn.Shared_Asset__c ||
+                    txn.Owner__c != oldTxn.Owner__c;
+            }
+
+            if (!shouldProcess) {
+                continue;
+            }
+
+            if (oldTxnsById != null) {
+                paymentTxnIdsToClear.add(txn.Id);
+            }
+
+            if (isProfitDistributionTransaction(txn)) {
+                eligible.add(txn);
+                assetIds.add(txn.Shared_Asset__c);
+                ownerIds.add(txn.Owner__c);
+            }
+        }
+
+        if (eligible.isEmpty() && paymentTxnIdsToClear.isEmpty()) {
+            return;
+        }
+
+        List<Payout__c> payoutsToUpdate = new List<Payout__c>();
+        if (!paymentTxnIdsToClear.isEmpty()) {
+            for (Payout__c payout : [
+                SELECT Id, Is_Paid__c, Payment_Transaction__c
+                FROM Payout__c
+                WHERE Payment_Transaction__c IN :paymentTxnIdsToClear
+            ]) {
+                payout.Is_Paid__c = false;
+                payout.Payment_Transaction__c = null;
+                payoutsToUpdate.add(payout);
+            }
+        }
+
+        if (!eligible.isEmpty()) {
+            List<Payout__c> candidatePayouts = [
+                SELECT Id, Owner__c, Amount__c, Is_Paid__c, Payment_Transaction__c,
+                    Transaction__r.Shared_Asset__c
+                FROM Payout__c
+                WHERE Is_Paid__c = false
+                    AND Payment_Transaction__c = null
+                    AND Owner__c IN :ownerIds
+                    AND Transaction__r.Shared_Asset__c IN :assetIds
+                ORDER BY Transaction__r.Transaction_Date__c ASC, CreatedDate ASC
+            ];
+
+            Set<Id> selectedPayoutIds = new Set<Id>();
+            for (Transaction__c txn : eligible) {
+                Decimal remainingAmount = txn.Amount__c;
+                for (Payout__c payout : candidatePayouts) {
+                    if (selectedPayoutIds.contains(payout.Id) ||
+                        payout.Owner__c != txn.Owner__c ||
+                        payout.Transaction__r.Shared_Asset__c != txn.Shared_Asset__c ||
+                        payout.Amount__c == null ||
+                        payout.Amount__c > remainingAmount) {
+                        continue;
+                    }
+
+                    payout.Is_Paid__c = true;
+                    payout.Payment_Transaction__c = txn.Id;
+                    payoutsToUpdate.add(payout);
+                    selectedPayoutIds.add(payout.Id);
+                    remainingAmount -= payout.Amount__c;
+
+                    if (remainingAmount == 0) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!payoutsToUpdate.isEmpty()) {
+            update payoutsToUpdate;
         }
     }
 
@@ -389,10 +507,88 @@ public with sharing class TransactionService implements IService {
         return String.valueOf(assetId) + ':' + String.valueOf(ownerId);
     }
 
+    private void createAndLinkLoans(List<Transaction__c> txns) {
+        List<Transaction__c> loanDisbursements = new List<Transaction__c>();
+        for (Transaction__c txn : txns) {
+            if (txn.Type__c == 'Loan_Disbursement' &&
+                txn.Loan__c == null &&
+                txn.Shared_Asset__c != null &&
+                txn.Amount__c != null &&
+                txn.Amount__c > 0) {
+                loanDisbursements.add(txn);
+            }
+        }
+
+        if (loanDisbursements.isEmpty()) {
+            return;
+        }
+
+        List<Loan__c> loansToInsert = new List<Loan__c>();
+        for (Transaction__c txn : loanDisbursements) {
+            loansToInsert.add(new Loan__c(
+                Shared_Asset__c = txn.Shared_Asset__c,
+                Principal_Amount__c = txn.Amount__c,
+                Outstanding_Principal__c = txn.Amount__c,
+                Start_Date__c = txn.Transaction_Date__c == null ? Date.today() : txn.Transaction_Date__c.date(),
+                Status__c = 'Active'
+            ));
+        }
+
+        insert loansToInsert;
+
+        for (Integer index = 0; index < loanDisbursements.size(); index++) {
+            loanDisbursements[index].Loan__c = loansToInsert[index].Id;
+        }
+    }
+
+    private void createAndLinkLoanInstallments(List<Transaction__c> txns) {
+        List<Transaction__c> paymentTxns = new List<Transaction__c>();
+        for (Transaction__c txn : txns) {
+            if ((txn.Type__c == 'Loan_Repayment' || txn.Type__c == 'Interest_Payment') &&
+                txn.Loan__c != null &&
+                txn.Loan_Installment__c == null &&
+                txn.Amount__c != null &&
+                txn.Amount__c > 0) {
+                paymentTxns.add(txn);
+            }
+        }
+
+        if (paymentTxns.isEmpty()) {
+            return;
+        }
+
+        List<Loan_Installment__c> installmentsToInsert = new List<Loan_Installment__c>();
+        for (Transaction__c txn : paymentTxns) {
+            Date txnDate = txn.Transaction_Date__c == null ? Date.today() : txn.Transaction_Date__c.date();
+            installmentsToInsert.add(new Loan_Installment__c(
+                Loan__c = txn.Loan__c,
+                Due_Date__c = txnDate,
+                Amount__c = txn.Amount__c,
+                Principal_Component__c = txn.Type__c == 'Loan_Repayment' ? txn.Amount__c : 0,
+                Interest_Component__c = txn.Type__c == 'Interest_Payment' ? txn.Amount__c : 0,
+                Status__c = 'Planned'
+            ));
+        }
+
+        insert installmentsToInsert;
+
+        for (Integer index = 0; index < paymentTxns.size(); index++) {
+            paymentTxns[index].Loan_Installment__c = installmentsToInsert[index].Id;
+        }
+    }
+
     private static Boolean isPayoutGeneratingTransaction(Transaction__c txn) {
         return txn.Type__c != null &&
             txn.Amount__c != null &&
             txn.Shared_Asset__c != null &&
             (txn.Type__c == 'Income_From_Asset' || txn.Type__c == 'Return');
+    }
+
+    private static Boolean isProfitDistributionTransaction(Transaction__c txn) {
+        return txn.Type__c == 'Profit_Distribution' &&
+            txn.Amount__c != null &&
+            txn.Amount__c > 0 &&
+            txn.Shared_Asset__c != null &&
+            txn.Owner__c != null;
     }
 }

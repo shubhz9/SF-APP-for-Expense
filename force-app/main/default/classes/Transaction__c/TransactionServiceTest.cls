@@ -152,6 +152,121 @@ private class TransactionServiceTest {
     }
 
     @IsTest
+    static void createsLoanFromLoanDisbursementTransaction() {
+        Shared_Asset__c asset = createAsset();
+
+        Test.startTest();
+        Transaction__c disbursement = new Transaction__c(
+            Shared_Asset__c = asset.Id,
+            Type__c = 'Loan_Disbursement',
+            Amount__c = 2500,
+            Transaction_Date__c = System.now()
+        );
+        insert disbursement;
+        Test.stopTest();
+
+        disbursement = [
+            SELECT Loan__c, Direction__c
+            FROM Transaction__c
+            WHERE Id = :disbursement.Id
+        ];
+        System.assertNotEquals(null, disbursement.Loan__c, 'Loan disbursement should create and link a loan.');
+        System.assertEquals('Inward', disbursement.Direction__c);
+
+        Loan__c loan = [
+            SELECT Shared_Asset__c, Principal_Amount__c, Outstanding_Principal__c, Status__c
+            FROM Loan__c
+            WHERE Id = :disbursement.Loan__c
+        ];
+        System.assertEquals(asset.Id, loan.Shared_Asset__c);
+        System.assertEquals(2500, loan.Principal_Amount__c);
+        System.assertEquals(2500, loan.Outstanding_Principal__c);
+        System.assertEquals('Active', loan.Status__c);
+    }
+
+    @IsTest
+    static void createsInstallmentFromLoanPaymentTransaction() {
+        Shared_Asset__c asset = createAsset();
+        Loan__c loan = new Loan__c(
+            Shared_Asset__c = asset.Id,
+            Principal_Amount__c = 1000,
+            Outstanding_Principal__c = 1000,
+            Status__c = 'Active'
+        );
+        insert loan;
+
+        Test.startTest();
+        Transaction__c repayment = new Transaction__c(
+            Shared_Asset__c = asset.Id,
+            Loan__c = loan.Id,
+            Type__c = 'Loan_Repayment',
+            Amount__c = 250,
+            Transaction_Date__c = System.now()
+        );
+        insert repayment;
+        Test.stopTest();
+
+        repayment = [
+            SELECT Loan_Installment__c
+            FROM Transaction__c
+            WHERE Id = :repayment.Id
+        ];
+        System.assertNotEquals(null, repayment.Loan_Installment__c, 'Loan payment should create and link an installment.');
+
+        Loan_Installment__c installment = [
+            SELECT Loan__c, Amount__c, Principal_Component__c, Interest_Component__c, Status__c, Paid_Date__c
+            FROM Loan_Installment__c
+            WHERE Id = :repayment.Loan_Installment__c
+        ];
+        System.assertEquals(loan.Id, installment.Loan__c);
+        System.assertEquals(250, installment.Amount__c);
+        System.assertEquals(250, installment.Principal_Component__c);
+        System.assertEquals(0, installment.Interest_Component__c);
+        System.assertEquals('Paid', installment.Status__c);
+        System.assertNotEquals(null, installment.Paid_Date__c);
+    }
+
+    @IsTest
+    static void profitDistributionTransactionMarksMatchingPayoutPaid() {
+        TestData data = createAssetWithOwners();
+        Transaction__c incomeTxn = new Transaction__c(
+            Shared_Asset__c = data.asset.Id,
+            Type__c = 'Income_From_Asset',
+            Amount__c = 1000,
+            Transaction_Date__c = System.now()
+        );
+        insert incomeTxn;
+
+        Payout__c payout = [
+            SELECT Id, Amount__c, Is_Paid__c, Payment_Transaction__c
+            FROM Payout__c
+            WHERE Transaction__c = :incomeTxn.Id
+                AND Owner__c = :data.ownerOne.Id
+            LIMIT 1
+        ];
+        System.assertEquals(false, payout.Is_Paid__c);
+
+        Test.startTest();
+        Transaction__c paymentTxn = new Transaction__c(
+            Shared_Asset__c = data.asset.Id,
+            Owner__c = data.ownerOne.Id,
+            Type__c = 'Profit_Distribution',
+            Amount__c = payout.Amount__c,
+            Transaction_Date__c = System.now()
+        );
+        insert paymentTxn;
+        Test.stopTest();
+
+        payout = [
+            SELECT Is_Paid__c, Payment_Transaction__c
+            FROM Payout__c
+            WHERE Id = :payout.Id
+        ];
+        System.assertEquals(true, payout.Is_Paid__c, 'Profit distribution should mark a matching payout paid.');
+        System.assertEquals(paymentTxn.Id, payout.Payment_Transaction__c);
+    }
+
+    @IsTest
     static void validatesAmountOwnerAndLoanRequirements() {
         Shared_Asset__c asset = createAsset();
 

@@ -44,12 +44,14 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
     public override void onBeforeInsert() {
         TransactionService service = new TransactionService();
         service.applyDirection((List<Transaction__c>) getRecords());
+        service.prepareRelatedRecords((List<Transaction__c>) getRecords());
         this.validateTransactions((List<Transaction__c>) getRecords());
     }
 
     public override void onAfterInsert(){
         TransactionService service = new TransactionService();
         service.processIncomeAndReturnTransactions((List<Transaction__c>) getRecords());
+        service.processProfitDistributionTransactions((List<Transaction__c>) getRecords());
         service.refreshRelatedRollups((List<Transaction__c>) getRecords(), (Map<Id, Transaction__c>) null);
     }
 
@@ -60,6 +62,10 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
     public override void onAfterUpdate(Map<Id, SObject> existingRecords){
         TransactionService service = new TransactionService();
         service.processIncomeAndReturnTransactions(
+            (List<Transaction__c>) getRecords(),
+            this.getOldTransactionsById(existingRecords)
+        );
+        service.processProfitDistributionTransactions(
             (List<Transaction__c>) getRecords(),
             this.getOldTransactionsById(existingRecords)
         );
@@ -81,6 +87,7 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
     public override void onBeforeUpdate(Map<Id, SObject> existingRecords) {
         TransactionService service = new TransactionService();
         service.applyDirection((List<Transaction__c>) getRecords());
+        service.prepareRelatedRecords((List<Transaction__c>) getRecords());
         this.validateTransactions(this.getChangedTransactions(existingRecords));
     }
 
