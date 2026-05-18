@@ -23,12 +23,30 @@ public with sharing class ITBA_Application_UTIL {
 	/**
 	 * Selectors
 	 */
-	public static final fflib_Application.SelectorFactory selector = new fflib_Application.SelectorFactory();
+	public static final fflib_Application.SelectorFactory selector = new fflib_Application.SelectorFactory(
+		new Map<SObjectType, Type>{
+			Asset_Ownership__c.SObjectType => AssetOwnershipSelector.class,
+			Loan__c.SObjectType => LoanSelector.class,
+			Loan_Installment__c.SObjectType => LoanInstallmentSelector.class,
+			Payout__c.SObjectType => PayoutSelector.class,
+			Shared_Asset__c.SObjectType => SharedAssetSelector.class,
+			Transaction__c.SObjectType => TransactionSelector.class
+		}
+	);
 
 	/**
 	 * Domains
 	 */
-	public static final fflib_Application.DomainFactory domain = new fflib_Application.DomainFactory(  );
+	public static final fflib_Application.DomainFactory domain = new fflib_Application.DomainFactory(
+		selector,
+		new Map<SObjectType, Type>{
+			Asset_Ownership__c.SObjectType => AssetOwnershipDomain.Constructor.class,
+			Loan__c.SObjectType => LoanDomain.Constructor.class,
+			Loan_Installment__c.SObjectType => LoanInstallmentDomain.Constructor.class,
+			Payout__c.SObjectType => PayoutDomain.Constructor.class,
+			Transaction__c.SObjectType => TransactionDomain.Constructor.class
+		}
+	);
 
 	/**
 	 * Services

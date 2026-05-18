@@ -12,9 +12,11 @@ trigger TransactionTrigger on Transaction__c (
     before insert,
     before update,
     after insert,
-    after update
+    after update,
+    after delete
 ) {
-    TransactionDomain domain = new TransactionDomain(Trigger.new, Trigger.oldMap);
+    List<Transaction__c> triggerRecords = Trigger.isDelete ? Trigger.old : Trigger.new;
+    TransactionDomain domain = new TransactionDomain(triggerRecords, Trigger.oldMap);
 
     if (Trigger.isBefore) {
         if (Trigger.isInsert) {
@@ -31,6 +33,9 @@ trigger TransactionTrigger on Transaction__c (
         }
         if (Trigger.isUpdate) {
             domain.onAfterUpdate();
+        }
+        if (Trigger.isDelete) {
+            domain.onAfterDelete();
         }
     }
 }
