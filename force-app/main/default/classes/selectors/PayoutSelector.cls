@@ -11,6 +11,7 @@ public inherited sharing class PayoutSelector extends fflib_SObjectSelector {
         'Ownership_Percentage__c',
         'Amount__c',
         'Is_Paid__c',
+        'Payment_Transaction__c',
         'Owner__c',
         'Remarks__c'
     };
@@ -38,6 +39,7 @@ public inherited sharing class PayoutSelector extends fflib_SObjectSelector {
             Payout__c.Ownership_Percentage__c,
             Payout__c.Amount__c,
             Payout__c.Is_Paid__c,
+            Payout__c.Payment_Transaction__c,
             Payout__c.Owner__c,
             Payout__c.Remarks__c
         };

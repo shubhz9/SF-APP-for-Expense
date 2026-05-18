@@ -43,6 +43,7 @@ public with sharing class ITBA_Application_UTIL {
 			Asset_Ownership__c.SObjectType => AssetOwnershipDomain.Constructor.class,
 			Loan__c.SObjectType => LoanDomain.Constructor.class,
 			Loan_Installment__c.SObjectType => LoanInstallmentDomain.Constructor.class,
+			Payout__c.SObjectType => PayoutDomain.Constructor.class,
 			Transaction__c.SObjectType => TransactionDomain.Constructor.class
 		}
 	);
