@@ -6,7 +6,6 @@ private class TransactionServiceTest {
 
         Test.startTest();
         Transaction__c incomeTxn = new Transaction__c(
-            Name = 'May Rental Income',
             Shared_Asset__c = data.asset.Id,
             Type__c = 'Income_From_Asset',
             Amount__c = 1000,
@@ -33,10 +32,8 @@ private class TransactionServiceTest {
         System.assertEquals(600, payouts[1].Amount__c, 'Majority owner should receive 60%.');
         System.assertEquals(false, payouts[0].Is_Paid__c, 'Generated payouts should start unpaid.');
 
-        Test.startTest();
         incomeTxn.Amount__c = 2000;
         update incomeTxn;
-        Test.stopTest();
 
         payouts = [
             SELECT Amount__c
@@ -54,7 +51,6 @@ private class TransactionServiceTest {
         TestData data = createAssetWithOwners();
 
         Transaction__c ownerOneContribution = new Transaction__c(
-            Name = 'Owner One Down Payment',
             Shared_Asset__c = data.asset.Id,
             Owner__c = data.ownerOne.Id,
             Type__c = 'Down_Payment',
@@ -62,7 +58,6 @@ private class TransactionServiceTest {
             Transaction_Date__c = System.now()
         );
         Transaction__c ownerTwoContribution = new Transaction__c(
-            Name = 'Owner Two Contribution',
             Shared_Asset__c = data.asset.Id,
             Owner__c = data.ownerTwo.Id,
             Type__c = 'Owner_Contribution',
@@ -78,9 +73,7 @@ private class TransactionServiceTest {
         System.assertEquals(300, ownershipByOwnerId.get(data.ownerOne.Id).Total_Contribution__c);
         System.assertEquals(700, ownershipByOwnerId.get(data.ownerTwo.Id).Total_Contribution__c);
 
-        Test.startTest();
         delete ownerTwoContribution;
-        Test.stopTest();
 
         ownershipByOwnerId = getOwnershipByOwnerId(data.asset.Id);
         System.assertEquals(300, ownershipByOwnerId.get(data.ownerOne.Id).Total_Contribution__c);
@@ -111,7 +104,6 @@ private class TransactionServiceTest {
         insert installment;
 
         Transaction__c repayment = new Transaction__c(
-            Name = 'Principal Payment',
             Shared_Asset__c = asset.Id,
             Loan__c = loan.Id,
             Loan_Installment__c = installment.Id,
@@ -120,7 +112,6 @@ private class TransactionServiceTest {
             Transaction_Date__c = System.now()
         );
         Transaction__c interest = new Transaction__c(
-            Name = 'Interest Payment',
             Shared_Asset__c = asset.Id,
             Loan__c = loan.Id,
             Loan_Installment__c = installment.Id,
@@ -148,10 +139,8 @@ private class TransactionServiceTest {
         System.assertEquals('Paid', installment.Status__c, 'Principal plus interest should satisfy the installment amount.');
         System.assertNotEquals(null, installment.Paid_Date__c);
 
-        Test.startTest();
         repayment.Amount__c = 1000;
         update repayment;
-        Test.stopTest();
 
         loan = [
             SELECT Outstanding_Principal__c, Status__c
@@ -168,7 +157,6 @@ private class TransactionServiceTest {
 
         Database.SaveResult contributionResult = Database.insert(
             new Transaction__c(
-                Name = 'Missing Owner',
                 Shared_Asset__c = asset.Id,
                 Type__c = 'Owner_Contribution',
                 Amount__c = 100,
@@ -180,7 +168,6 @@ private class TransactionServiceTest {
 
         Database.SaveResult loanResult = Database.insert(
             new Transaction__c(
-                Name = 'Missing Loan',
                 Shared_Asset__c = asset.Id,
                 Type__c = 'Loan_Repayment',
                 Amount__c = 100,
@@ -194,7 +181,6 @@ private class TransactionServiceTest {
         insert owner;
         Database.SaveResult amountResult = Database.insert(
             new Transaction__c(
-                Name = 'Invalid Amount',
                 Shared_Asset__c = asset.Id,
                 Owner__c = owner.Id,
                 Type__c = 'Down_Payment',
@@ -204,6 +190,43 @@ private class TransactionServiceTest {
             false
         );
         System.assertEquals(false, amountResult.isSuccess(), 'Amount must be positive.');
+    }
+
+    @IsTest
+    static void domainFactoryConstructsTransactionDomain() {
+        Shared_Asset__c asset = createAsset();
+        TransactionDomain.ITransactions domain = TransactionDomain.newInstance(
+            new List<Transaction__c>{
+                new Transaction__c(
+                    Shared_Asset__c = asset.Id,
+                    Type__c = 'Other_Income',
+                    Amount__c = 10,
+                    Transaction_Date__c = System.now()
+                )
+            }
+        );
+
+        Test.startTest();
+        domain.validateTransactions();
+        Test.stopTest();
+
+        System.assertNotEquals(null, domain, 'Domain factory should construct the transaction domain.');
+    }
+
+    @IsTest
+    static void domainFactoryConstructsTransactionDomainFromIds() {
+        Shared_Asset__c asset = createAsset();
+        Transaction__c txn = new Transaction__c(
+            Shared_Asset__c = asset.Id,
+            Type__c = 'Other_Income',
+            Amount__c = 10,
+            Transaction_Date__c = System.now()
+        );
+        insert txn;
+
+        TransactionDomain.ITransactions domain = TransactionDomain.newInstance(new Set<Id>{ txn.Id });
+
+        System.assertNotEquals(null, domain, 'Domain factory should construct transaction domain from ids.');
     }
 
     private static TestData createAssetWithOwners() {
@@ -216,7 +239,6 @@ private class TransactionServiceTest {
 
         insert new List<Asset_Ownership__c>{
             new Asset_Ownership__c(
-                Name = 'Owner One Share',
                 Shared_Asset__c = data.asset.Id,
                 Owner__c = data.ownerOne.Id,
                 Ownership_Percentage__c = 60,
@@ -224,7 +246,6 @@ private class TransactionServiceTest {
                 Is_Active__c = true
             ),
             new Asset_Ownership__c(
-                Name = 'Owner Two Share',
                 Shared_Asset__c = data.asset.Id,
                 Owner__c = data.ownerTwo.Id,
                 Ownership_Percentage__c = 40,

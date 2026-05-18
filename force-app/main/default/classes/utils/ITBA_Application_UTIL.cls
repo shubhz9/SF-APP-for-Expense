@@ -40,6 +40,7 @@ public with sharing class ITBA_Application_UTIL {
 	public static final fflib_Application.DomainFactory domain = new fflib_Application.DomainFactory(
 		selector,
 		new Map<SObjectType, Type>{
+			Asset_Ownership__c.SObjectType => AssetOwnershipDomain.Constructor.class,
 			Transaction__c.SObjectType => TransactionDomain.Constructor.class
 		}
 	);

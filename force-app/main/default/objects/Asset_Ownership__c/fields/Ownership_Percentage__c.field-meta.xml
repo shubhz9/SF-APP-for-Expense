@@ -3,6 +3,6 @@
     <fullName>Ownership_Percentage__c</fullName>
     <label>Ownership Percentage</label>
     <type>Percent</type>
-    <precision>3</precision>
+    <precision>5</precision>
     <scale>2</scale>
 </CustomField>
