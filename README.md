@@ -17,14 +17,14 @@ For the detailed product and automation blueprint, see [docs/shared-expense-trac
 
 ## Main Salesforce Objects
 
-| Object | Purpose |
-| --- | --- |
-| `Shared_Asset__c` | Master record for a jointly owned asset. |
-| `Asset_Ownership__c` | Defines each participant's ownership percentage for an asset. |
-| `Transaction__c` | Ledger for every inward and outward cash movement. |
-| `Loan__c` | Financing record for an asset. |
-| `Loan_Installment__c` | Repayment schedule and status tracker for a loan. |
-| `Payout__c` | Owner-level payout allocation created from income or return transactions. |
+| Object                | Purpose                                                                   |
+| --------------------- | ------------------------------------------------------------------------- |
+| `Shared_Asset__c`     | Master record for a jointly owned asset.                                  |
+| `Asset_Ownership__c`  | Defines each participant's ownership percentage for an asset.             |
+| `Transaction__c`      | Ledger for every inward and outward cash movement.                        |
+| `Loan__c`             | Financing record for an asset.                                            |
+| `Loan_Installment__c` | Repayment schedule and status tracker for a loan.                         |
+| `Payout__c`           | Owner-level payout allocation created from income or return transactions. |
 
 ## Project Structure
 

@@ -5,11 +5,13 @@ public inherited sharing class AssetOwnershipSelector extends fflib_SObjectSelec
     private List<String> additionalSObjectFieldList = new List<String>{
         'Id',
         'Name',
-        'Asset__c',
+        'Shared_Asset__c',
         'Owner__c',
         'Ownership_Percentage__c',
+        'Total_Contribution__c',
         'Start_Date__c',
-        'End_Date__c'
+        'End_Date__c',
+        'Is_Active__c'
     };
 
     /* 2. Boilerplate code */
@@ -34,8 +36,10 @@ public inherited sharing class AssetOwnershipSelector extends fflib_SObjectSelec
             Asset_Ownership__c.Shared_Asset__c,
             Asset_Ownership__c.Owner__c,
             Asset_Ownership__c.Ownership_Percentage__c,
+            Asset_Ownership__c.Total_Contribution__c,
             Asset_Ownership__c.Start_Date__c,
-            Asset_Ownership__c.End_Date__c
+            Asset_Ownership__c.End_Date__c,
+            Asset_Ownership__c.Is_Active__c
         };
     }
 
