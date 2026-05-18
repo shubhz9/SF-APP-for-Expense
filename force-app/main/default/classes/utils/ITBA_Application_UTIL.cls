@@ -41,6 +41,8 @@ public with sharing class ITBA_Application_UTIL {
 		selector,
 		new Map<SObjectType, Type>{
 			Asset_Ownership__c.SObjectType => AssetOwnershipDomain.Constructor.class,
+			Loan__c.SObjectType => LoanDomain.Constructor.class,
+			Loan_Installment__c.SObjectType => LoanInstallmentDomain.Constructor.class,
 			Transaction__c.SObjectType => TransactionDomain.Constructor.class
 		}
 	);
