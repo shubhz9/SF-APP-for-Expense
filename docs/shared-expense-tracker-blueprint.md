@@ -132,7 +132,7 @@ The design principle is: **`Transaction__c` is the source-of-truth cash ledger, 
 
 ## 5. Direction Rules
 
-The current Apex service already defines the intended direction mapping:
+The current Apex implementation centralizes type behavior in `TransactionTypeConfig`. That class is the source for direction mapping, required context, payout generation, contribution rollups, loan principal repayment behavior, and profit distribution behavior.
 
 - **Inward:** `Down_Payment`, `Owner_Contribution`, `Loan_Disbursement`, `Income_From_Asset`, `Return`, `Other_Income`
 - **Outward:** `Loan_Repayment`, `Interest_Payment`, `Maintenance_Expense`, `Insurance`, `Profit_Distribution`, `Other_Expense`
@@ -173,6 +173,13 @@ Recommended product rule:
    - Snapshot `Ownership_Percentage__c` from the ownership record.
 4. When money is actually distributed, create a `Profit_Distribution` transaction for the owner.
 5. Link the payout to the payment transaction via `Payment_Transaction__c` and set `Is_Paid__c = true`.
+
+Current MVP behavior:
+
+- Active ownership for the asset must total exactly 100% before financial transactions can be saved.
+- Payout percentages are stored as snapshots and are not recalculated when ownership changes later.
+- Partial payout settlement is not supported. A `Profit_Distribution` transaction must exactly match one or more unpaid payouts for the same owner and asset.
+- The payment transaction is linked back to the settled payout through `Payout__c.Payment_Transaction__c`.
 
 ### 6.4 Expense Allocation and Reimbursement
 
@@ -215,35 +222,38 @@ The current metadata supports expense capture, but a reimbursement allocation ob
 
 ## 8. Validation Rules to Add
 
-1. **Ownership total validation:** Active ownership percentages for one shared asset should total 100%.
-2. **Single active ownership per owner per asset:** A contact should not have overlapping active ownership periods for the same asset.
-3. **Transaction amount validation:** `Amount__c` should be positive; direction should supply sign semantics.
+1. **Ownership total validation:** Active ownership percentages cannot exceed 100% on ownership save, and transactions are blocked until active ownership totals exactly 100%.
+2. **Single active ownership per owner per asset:** A contact cannot have overlapping active ownership records for the same asset.
+3. **Transaction amount validation:** `Amount__c` must be positive; direction supplies sign semantics.
 4. **Type-specific required fields:**
    - Loan transaction types require `Loan__c`.
-   - Loan installment repayment transactions should require `Loan_Installment__c` when an installment exists.
+   - Loan installment repayment transactions require `Loan__c` when an installment is selected.
    - Owner contribution and profit distribution types require `Owner__c`.
-5. **Payout integrity:** `Payout__c.Amount__c` should not be manually changed after payment unless an admin adjustment process is used.
-6. **Closed asset restriction:** Prevent new operational transactions when `Shared_Asset__c.Status__c = Sold`, except final return, payout, or correction entries.
+5. **Loan integrity:** Closed loans reject new loan transactions, and principal repayment cannot exceed outstanding principal.
+6. **Payout integrity:** Paid payout financial details cannot be changed, and payment transactions must be profit distributions for the same owner.
+7. **Closed asset restriction:** Prevent new operational transactions when `Shared_Asset__c.Status__c = Sold`, except final return, payout, or correction entries. This remains a future rule.
 
 ## 9. Automation Blueprint
 
 ### 9.1 Already Represented in Apex Design
 
-- Auto-derive `Transaction__c.Direction__c` from `Transaction__c.Type__c`.
+- Auto-derive `Transaction__c.Direction__c` from `Transaction__c.Type__c` using `TransactionTypeConfig`.
+- Validate transaction context before save, including active ownership readiness, positive amounts, owner/loan requirements, closed loans, overpayment, and exact payout settlement.
 - Generate `Payout__c` records for `Income_From_Asset` and `Return` transactions based on active ownership percentages.
 - Delete and regenerate payouts when the source income or return transaction changes, preventing duplicate payout rows.
+- Mark payouts paid from matching `Profit_Distribution` transactions and link the payment transaction.
+- Roll up owner contributions from contribution transactions.
+- Roll up loan principal repayment and installment status from linked transactions.
 
 ### 9.2 Next Automations to Implement
 
 | Priority | Automation                                                                            | Trigger / Timing                                       | Result                                               |
 | -------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------- |
-| 1        | Wire `TransactionService.applyDirection` into transaction before insert/update logic. | `Transaction__c` before save                           | Direction is always consistent with type.            |
-| 2        | Wire income/return payout generation into transaction after insert/update logic.      | `Transaction__c` after save                            | Payouts are created automatically.                   |
-| 3        | Update loan installment status from repayment transactions.                           | `Transaction__c` after save                            | Installments become `Paid`, `Pending`, or `Overdue`. |
-| 4        | Roll up loan outstanding principal.                                                   | `Transaction__c` after save or scheduled recalculation | Loan balances stay current.                          |
-| 5        | Roll up owner total contribution.                                                     | `Transaction__c` after save or scheduled recalculation | Ownership records show contribution totals.          |
-| 6        | Validate active ownership totals.                                                     | `Asset_Ownership__c` before/after save                 | Prevent invalid ownership splits.                    |
-| 7        | Generate expense allocations.                                                         | `Transaction__c` after save for expense types          | Owner-level liability reporting becomes explicit.    |
+| 1        | Add explicit expense allocation records if settlement tracking is required.           | `Transaction__c` after save for expense types          | Owner-level liability reporting becomes explicit.    |
+| 2        | Add asset KPI rollup fields or report-backed summaries.                              | Transaction recalculation or reports                   | Asset cash position is visible without manual work.  |
+| 3        | Add dashboard and report metadata.                                                    | Reports and dashboards                                 | MVP has packaged operational analytics.              |
+| 4        | Add sold-asset transaction restrictions.                                              | `Transaction__c` before save                           | Closed asset lifecycle is protected.                 |
+| 5        | Use transaction date for historical ownership selection.                              | Payout generation                                      | Ownership changes are fully effective-date aware.    |
 
 ## 10. Reporting and UI Blueprint
 
@@ -301,12 +311,42 @@ Four people buy a property for 1,000,000 with equal 25% ownership:
 
 - The `Transaction__c` object should remain the immutable-style ledger. Prefer correction transactions over editing historical financial records after settlement.
 - Snapshot values such as `Payout__c.Ownership_Percentage__c` are important because ownership percentages may change later.
-- If ownership can change over time, payout generation should use ownership records active on `Transaction_Date__c`, not just `Is_Active__c` on the current date.
+- Current payout generation uses active ownership records. If ownership can change over time, payout generation should use ownership records active on `Transaction_Date__c`, not just `Is_Active__c` on the current date.
 - If expenses must be settled between owners, add an explicit expense allocation object rather than overloading `Payout__c`.
 - If loans can have multiple lenders or owner-funded loans, add lender/contact relationships to `Loan__c` or introduce a `Loan_Party__c` junction object.
 - Reports should clearly distinguish cash received into the asset pool from cash distributed to owners.
 
-## 13. Suggested Build Phases
+## 13. Audit Status as of Current MVP Pass
+
+Done:
+
+- Core custom objects and relationships exist for shared assets, ownership, transactions, loans, installments, and payouts.
+- Thin triggers delegate to domain classes.
+- Domain and service classes handle validation and automation for the central ledger, ownership, loans, installments, and payouts.
+- Selectors exist for the core objects.
+- Page layouts, tabs, Lightning record pages, app metadata, a flow, and two permission sets are present.
+- Apex tests exist for the core service behavior and were extended for stricter transaction validation.
+
+Partially done:
+
+- Loan automation supports principal rollups and installment status updates, but does not generate a full amortized schedule from loan terms.
+- Owner financial position can be derived from ledger/payout records, but no packaged owner position service/report dashboard is implemented.
+- Asset financial position can be derived from transactions, but no packaged asset KPI fields/dashboard are implemented.
+
+Missing:
+
+- `Expense_Allocation__c` or equivalent detailed expense settlement records.
+- Packaged Salesforce reports and dashboard metadata.
+- Full effective-date-aware ownership selection for historical payout generation.
+- Sold-asset transaction restrictions.
+- CI workflow for formatting, linting, LWC tests, and deploy validation.
+
+Verification note:
+
+- Local npm checks require project dependencies. In the current environment, `npm install` timed out and left no `node_modules`.
+- Salesforce CLI is installed and the default org alias is `TrailheadDev`, but deploy validation failed with `EACCES` while calling the Salesforce metadata SOAP endpoint. Apex tests and deployment validation still require a reachable authenticated org.
+
+## 14. Suggested Build Phases
 
 ### Phase 1 — Ledger Foundation
 

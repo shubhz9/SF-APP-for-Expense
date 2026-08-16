@@ -82,7 +82,8 @@ private class TransactionServiceTest {
 
     @IsTest
     static void rollsUpLoanAndInstallmentState() {
-        Shared_Asset__c asset = createAsset();
+        TestData data = createAssetWithOwners();
+        Shared_Asset__c asset = data.asset;
         Loan__c loan = new Loan__c(
             Name = 'Vehicle Loan',
             Shared_Asset__c = asset.Id,
@@ -153,7 +154,7 @@ private class TransactionServiceTest {
 
     @IsTest
     static void createsLoanFromLoanDisbursementTransaction() {
-        Shared_Asset__c asset = createAsset();
+        Shared_Asset__c asset = createAssetWithOwners().asset;
 
         Test.startTest();
         Transaction__c disbursement = new Transaction__c(
@@ -186,7 +187,7 @@ private class TransactionServiceTest {
 
     @IsTest
     static void createsInstallmentFromLoanPaymentTransaction() {
-        Shared_Asset__c asset = createAsset();
+        Shared_Asset__c asset = createAssetWithOwners().asset;
         Loan__c loan = new Loan__c(
             Shared_Asset__c = asset.Id,
             Principal_Amount__c = 1000,
@@ -309,7 +310,7 @@ private class TransactionServiceTest {
 
     @IsTest
     static void domainFactoryConstructsTransactionDomain() {
-        Shared_Asset__c asset = createAsset();
+        Shared_Asset__c asset = createAssetWithOwners().asset;
         TransactionDomain.ITransactions domain = TransactionDomain.newInstance(
             new List<Transaction__c>{
                 new Transaction__c(
@@ -330,7 +331,7 @@ private class TransactionServiceTest {
 
     @IsTest
     static void domainFactoryConstructsTransactionDomainFromIds() {
-        Shared_Asset__c asset = createAsset();
+        Shared_Asset__c asset = createAssetWithOwners().asset;
         Transaction__c txn = new Transaction__c(
             Shared_Asset__c = asset.Id,
             Type__c = 'Other_Income',
@@ -342,6 +343,98 @@ private class TransactionServiceTest {
         TransactionDomain.ITransactions domain = TransactionDomain.newInstance(new Set<Id>{ txn.Id });
 
         System.assertNotEquals(null, domain, 'Domain factory should construct transaction domain from ids.');
+    }
+
+    @IsTest
+    static void blocksTransactionsWhenActiveOwnershipDoesNotTotalOneHundred() {
+        Shared_Asset__c asset = createAsset();
+        Contact owner = new Contact(LastName = 'Incomplete Owner');
+        insert owner;
+        insert new Asset_Ownership__c(
+            Shared_Asset__c = asset.Id,
+            Owner__c = owner.Id,
+            Ownership_Percentage__c = 60,
+            Start_Date__c = Date.today(),
+            Is_Active__c = true
+        );
+
+        Database.SaveResult result = Database.insert(
+            new Transaction__c(
+                Shared_Asset__c = asset.Id,
+                Owner__c = owner.Id,
+                Type__c = 'Owner_Contribution',
+                Amount__c = 100,
+                Transaction_Date__c = System.now()
+            ),
+            false
+        );
+
+        System.assertEquals(false, result.isSuccess(), 'Transactions should require active ownership to total 100%.');
+    }
+
+    @IsTest
+    static void blocksLoanOverpaymentAndClosedLoanTransactions() {
+        Shared_Asset__c asset = createAssetWithOwners().asset;
+        Loan__c loan = new Loan__c(
+            Shared_Asset__c = asset.Id,
+            Principal_Amount__c = 1000,
+            Outstanding_Principal__c = 100,
+            Status__c = 'Active'
+        );
+        insert loan;
+
+        Database.SaveResult overpaymentResult = Database.insert(
+            new Transaction__c(
+                Shared_Asset__c = asset.Id,
+                Loan__c = loan.Id,
+                Type__c = 'Loan_Repayment',
+                Amount__c = 101,
+                Transaction_Date__c = System.now()
+            ),
+            false
+        );
+        System.assertEquals(false, overpaymentResult.isSuccess(), 'Repayment above outstanding principal should fail.');
+
+        loan.Outstanding_Principal__c = 0;
+        loan.Status__c = 'Closed';
+        update loan;
+
+        Database.SaveResult closedLoanResult = Database.insert(
+            new Transaction__c(
+                Shared_Asset__c = asset.Id,
+                Loan__c = loan.Id,
+                Type__c = 'Interest_Payment',
+                Amount__c = 10,
+                Transaction_Date__c = System.now()
+            ),
+            false
+        );
+        System.assertEquals(false, closedLoanResult.isSuccess(), 'Closed loans should reject new loan transactions.');
+    }
+
+    @IsTest
+    static void blocksProfitDistributionThatDoesNotMatchOpenPayouts() {
+        TestData data = createAssetWithOwners();
+        Transaction__c incomeTxn = new Transaction__c(
+            Shared_Asset__c = data.asset.Id,
+            Type__c = 'Income_From_Asset',
+            Amount__c = 1000,
+            Transaction_Date__c = System.now()
+        );
+        insert incomeTxn;
+
+        Database.SaveResult result = Database.insert(
+            new Transaction__c(
+                Shared_Asset__c = data.asset.Id,
+                Owner__c = data.ownerOne.Id,
+                Type__c = 'Profit_Distribution',
+                Amount__c = 1,
+                Transaction_Date__c = System.now()
+            ),
+            false
+        );
+
+        System.assertEquals(false, result.isSuccess(), 'Partial or unmatched distributions should be blocked.');
     }
 
     private static TestData createAssetWithOwners() {

@@ -110,6 +110,15 @@ private class PayoutServiceTest {
     static void blocksPaidPayoutFinancialChanges() {
         TestData data = createAssetWithOwners();
         Transaction__c incomeTxn = createIncomeTransaction(data.asset.Id);
+        Payout__c payout = new Payout__c(
+            Transaction__c = incomeTxn.Id,
+            Owner__c = data.ownerOne.Id,
+            Amount__c = 300,
+            Ownership_Percentage__c = 60,
+            Is_Paid__c = false
+        );
+        insert payout;
+
         Transaction__c paymentTxn = new Transaction__c(
             Shared_Asset__c = data.asset.Id,
             Owner__c = data.ownerOne.Id,
@@ -119,15 +128,9 @@ private class PayoutServiceTest {
         );
         insert paymentTxn;
 
-        Payout__c payout = new Payout__c(
-            Transaction__c = incomeTxn.Id,
-            Owner__c = data.ownerOne.Id,
-            Amount__c = 300,
-            Ownership_Percentage__c = 60,
-            Is_Paid__c = true,
-            Payment_Transaction__c = paymentTxn.Id
-        );
-        insert payout;
+        payout.Is_Paid__c = true;
+        payout.Payment_Transaction__c = paymentTxn.Id;
+        update payout;
 
         payout.Amount__c = 301;
         Database.SaveResult result = Database.update(payout, false);

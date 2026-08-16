@@ -108,11 +108,31 @@ In Salesforce, open the App Launcher and select **CoAsset**.
 
 1. Create a `Shared Asset` record with purchase details and status.
 2. Create `Asset Ownership` records for each participant and their ownership percentage.
-3. Add `Transaction` records for owner contributions, down payments, expenses, loan activity, income, returns, or distributions.
-4. For financed purchases, create a `Loan` record and related `Loan Installment` records.
-5. Review `Payout` records generated or maintained for owner-level income and return allocations.
+3. Ensure active ownership for the asset totals 100% before recording financial transactions.
+4. Add `Transaction` records for owner contributions, down payments, expenses, loan activity, income, returns, or distributions.
+5. For financed purchases, create a `Loan` record and related `Loan Installment` records.
+6. Review `Payout` records generated or maintained for owner-level income and return allocations.
 
 Transaction type drives business behavior. For example, `Income_From_Asset` and `Return` represent inward cash events that can be allocated to owners, while `Loan_Repayment`, `Interest_Payment`, `Maintenance_Expense`, and `Profit_Distribution` represent outward cash events.
+
+## Implemented MVP Automation
+
+- `TransactionTypeConfig` centralizes transaction type rules, including direction, required asset/owner/loan context, contribution behavior, payout generation, repayment behavior, and distribution behavior.
+- `Transaction__c.Direction__c` is derived before insert and update from `Transaction__c.Type__c`; users should not treat direction as an editable business input.
+- Transaction validation requires positive amounts, supported transaction types, required context fields, active ownership totaling 100%, valid loan status, no principal overpayment, and exact full-payout matching for profit distributions.
+- `Income_From_Asset` and `Return` transactions generate unpaid `Payout__c` rows for active owners using the ownership percentage as a historical snapshot.
+- `Profit_Distribution` transactions mark matching unpaid payout rows as paid and link `Payout__c.Payment_Transaction__c`. Partial payout settlement is not supported in this MVP; a distribution must exactly match one or more unpaid payouts for that owner and asset.
+- Loan repayment transactions roll up outstanding principal and close the loan when principal reaches zero. Interest payments do not reduce principal.
+- Loan installment status is recalculated from linked repayment and interest transactions.
+- Owner contribution totals are rolled up to active `Asset_Ownership__c` records from `Down_Payment` and `Owner_Contribution` transactions.
+
+## Current Limitations
+
+- Expense allocation is still implicit in the ledger and reports; there is no `Expense_Allocation__c` object in this repository.
+- Asset-level financial KPI fields and dashboard/report metadata are not yet implemented.
+- Ownership validation prevents active totals above 100% on ownership records and blocks transactions until active ownership totals exactly 100%. This allows progressive ownership setup while protecting the ledger.
+- Automatic date-effective ownership selection for historical payout generation is not implemented; payout generation uses currently active ownership records and snapshots their percentages.
+- Full Salesforce deployment validation and Apex test execution require an authenticated org.
 
 ## Development Commands
 

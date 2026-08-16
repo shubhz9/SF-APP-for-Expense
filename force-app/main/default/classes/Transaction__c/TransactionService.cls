@@ -12,6 +12,8 @@ public with sharing class TransactionService implements IService {
     public interface IService {
         void applyDirection(List<Transaction__c> newTxns);
         void prepareRelatedRecords(List<Transaction__c> newTxns);
+        void validateTransactionContexts(List<Transaction__c> newTxns);
+        void validateTransactionContexts(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void processIncomeAndReturnTransactions(List<Transaction__c> newTxns);
         void processIncomeAndReturnTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void processProfitDistributionTransactions(List<Transaction__c> newTxns);
@@ -19,41 +21,6 @@ public with sharing class TransactionService implements IService {
         void refreshRelatedRollups(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void refreshRelatedRollups(List<Transaction__c> newTxns, List<Transaction__c> oldTxns);
     }
-
-    private static final Set<String> INWARD_TYPES = new Set<String>{
-        'Down_Payment',
-        'Owner_Contribution',
-        'Loan_Disbursement',
-        'Income_From_Asset',
-        'Return',
-        'Other_Income'
-    };
-
-    private static final Set<String> OUTWARD_TYPES = new Set<String>{
-        'Loan_Repayment',
-        'Interest_Payment',
-        'Maintenance_Expense',
-        'Insurance',
-        'Profit_Distribution',
-        'Other_Expense'
-    };
-
-    private static final Set<String> OWNER_REQUIRED_TYPES = new Set<String>{
-        'Down_Payment',
-        'Owner_Contribution',
-        'Profit_Distribution'
-    };
-
-    private static final Set<String> LOAN_REQUIRED_TYPES = new Set<String>{
-        'Loan_Disbursement',
-        'Loan_Repayment',
-        'Interest_Payment'
-    };
-
-    private static final Set<String> CONTRIBUTION_TYPES = new Set<String>{
-        'Down_Payment',
-        'Owner_Contribution'
-    };
 
     public void applyDirection(List<Transaction__c> txns) {
         if (txns == null || txns.isEmpty()) {
@@ -65,20 +32,33 @@ public with sharing class TransactionService implements IService {
                 continue;
             }
 
-            if (INWARD_TYPES.contains(txn.Type__c)) {
-                txn.Direction__c = 'Inward';
-            } else if (OUTWARD_TYPES.contains(txn.Type__c)) {
-                txn.Direction__c = 'Outward';
+            TransactionTypeConfig.TransactionTypeRule rule = TransactionTypeConfig.ruleFor(txn.Type__c);
+            if (rule != null) {
+                txn.Direction__c = rule.direction;
             }
         }
     }
 
     public static Boolean requiresOwner(String transactionType) {
-        return OWNER_REQUIRED_TYPES.contains(transactionType);
+        return TransactionTypeConfig.requiresOwner(transactionType);
     }
 
     public static Boolean requiresLoan(String transactionType) {
-        return LOAN_REQUIRED_TYPES.contains(transactionType);
+        return TransactionTypeConfig.requiresLoan(transactionType);
+    }
+
+    public void validateTransactionContexts(List<Transaction__c> txns) {
+        validateTransactionContexts(txns, null);
+    }
+
+    public void validateTransactionContexts(List<Transaction__c> txns, Map<Id, Transaction__c> oldTxnsById) {
+        if (txns == null || txns.isEmpty()) {
+            return;
+        }
+
+        validateAssetsAreReady(txns);
+        validateLoanTransactions(txns, oldTxnsById);
+        validateProfitDistributionAmounts(txns);
     }
 
     public void prepareRelatedRecords(List<Transaction__c> txns) {
@@ -465,6 +445,7 @@ public with sharing class TransactionService implements IService {
         }
 
         Map<String, Decimal> contributionByAssetOwnerKey = new Map<String, Decimal>();
+        Set<String> contributionTypes = TransactionTypeConfig.ownerContributionTypes();
         for (AggregateResult result : [
             SELECT Shared_Asset__c assetId,
                 Owner__c ownerId,
@@ -472,7 +453,7 @@ public with sharing class TransactionService implements IService {
             FROM Transaction__c
             WHERE Shared_Asset__c IN :assetIds
                 AND Owner__c != null
-                AND Type__c IN :CONTRIBUTION_TYPES
+                AND Type__c IN :contributionTypes
             GROUP BY Shared_Asset__c, Owner__c
         ]) {
             contributionByAssetOwnerKey.put(
@@ -581,14 +562,189 @@ public with sharing class TransactionService implements IService {
         return txn.Type__c != null &&
             txn.Amount__c != null &&
             txn.Shared_Asset__c != null &&
-            (txn.Type__c == 'Income_From_Asset' || txn.Type__c == 'Return');
+            TransactionTypeConfig.generatesPayout(txn.Type__c);
     }
 
     private static Boolean isProfitDistributionTransaction(Transaction__c txn) {
-        return txn.Type__c == 'Profit_Distribution' &&
+        return TransactionTypeConfig.isProfitDistribution(txn.Type__c) &&
             txn.Amount__c != null &&
             txn.Amount__c > 0 &&
             txn.Shared_Asset__c != null &&
             txn.Owner__c != null;
+    }
+
+    private static void validateAssetsAreReady(List<Transaction__c> txns) {
+        Set<Id> assetIds = new Set<Id>();
+        for (Transaction__c txn : txns) {
+            if (txn.Shared_Asset__c != null && TransactionTypeConfig.requiresAsset(txn.Type__c)) {
+                assetIds.add(txn.Shared_Asset__c);
+            }
+        }
+
+        if (assetIds.isEmpty()) {
+            return;
+        }
+
+        Map<Id, Decimal> activePercentageByAssetId = new Map<Id, Decimal>();
+        for (AggregateResult result : [
+            SELECT Shared_Asset__c assetId,
+                SUM(Ownership_Percentage__c) totalPercentage
+            FROM Asset_Ownership__c
+            WHERE Shared_Asset__c IN :assetIds
+                AND Is_Active__c = true
+                AND Ownership_Percentage__c != null
+            GROUP BY Shared_Asset__c
+        ]) {
+            activePercentageByAssetId.put((Id) result.get('assetId'), (Decimal) result.get('totalPercentage'));
+        }
+
+        for (Transaction__c txn : txns) {
+            if (txn.Shared_Asset__c == null || !TransactionTypeConfig.requiresAsset(txn.Type__c)) {
+                continue;
+            }
+
+            Decimal activePercentage = activePercentageByAssetId.get(txn.Shared_Asset__c);
+            if (activePercentage == null || activePercentage != 100) {
+                txn.Shared_Asset__c.addError('Active ownership percentages must total 100% before transactions can be recorded.');
+            }
+        }
+    }
+
+    private static void validateLoanTransactions(List<Transaction__c> txns, Map<Id, Transaction__c> oldTxnsById) {
+        Set<Id> loanIds = new Set<Id>();
+        Map<Id, Decimal> principalRepaymentDeltaByLoanId = new Map<Id, Decimal>();
+
+        for (Transaction__c txn : txns) {
+            if (txn.Loan__c == null || String.isBlank(txn.Type__c)) {
+                continue;
+            }
+
+            if (txn.Type__c == 'Loan_Disbursement' ||
+                txn.Type__c == 'Loan_Repayment' ||
+                txn.Type__c == 'Interest_Payment') {
+                loanIds.add(txn.Loan__c);
+            }
+
+            if (!TransactionTypeConfig.isLoanPrincipalRepayment(txn.Type__c) || txn.Amount__c == null) {
+                continue;
+            }
+
+            Decimal delta = txn.Amount__c;
+            if (oldTxnsById != null && txn.Id != null && oldTxnsById.containsKey(txn.Id)) {
+                Transaction__c oldTxn = oldTxnsById.get(txn.Id);
+                if (oldTxn.Loan__c == txn.Loan__c && TransactionTypeConfig.isLoanPrincipalRepayment(oldTxn.Type__c)) {
+                    delta -= oldTxn.Amount__c == null ? 0 : oldTxn.Amount__c;
+                }
+            }
+            incrementAmount(principalRepaymentDeltaByLoanId, txn.Loan__c, delta);
+        }
+
+        if (loanIds.isEmpty()) {
+            return;
+        }
+
+        Map<Id, Loan__c> loansById = new Map<Id, Loan__c>([
+            SELECT Id, Status__c, Outstanding_Principal__c
+            FROM Loan__c
+            WHERE Id IN :loanIds
+        ]);
+
+        for (Transaction__c txn : txns) {
+            if (txn.Loan__c == null) {
+                continue;
+            }
+
+            Loan__c loan = loansById.get(txn.Loan__c);
+            if (loan == null) {
+                continue;
+            }
+
+            if ((txn.Type__c == 'Loan_Disbursement' || txn.Type__c == 'Loan_Repayment' || txn.Type__c == 'Interest_Payment') &&
+                loan.Status__c == 'Closed') {
+                txn.Loan__c.addError('Closed loans cannot receive new loan transactions.');
+            }
+        }
+
+        for (Transaction__c txn : txns) {
+            if (!TransactionTypeConfig.isLoanPrincipalRepayment(txn.Type__c) || txn.Loan__c == null) {
+                continue;
+            }
+
+            Loan__c loan = loansById.get(txn.Loan__c);
+            Decimal delta = principalRepaymentDeltaByLoanId.get(txn.Loan__c);
+            Decimal outstanding = loan == null || loan.Outstanding_Principal__c == null ? 0 : loan.Outstanding_Principal__c;
+            if (delta != null && delta > outstanding) {
+                txn.Amount__c.addError('Loan repayment cannot exceed outstanding principal.');
+            }
+        }
+    }
+
+    private static void validateProfitDistributionAmounts(List<Transaction__c> txns) {
+        List<Transaction__c> distributions = new List<Transaction__c>();
+        Set<Id> assetIds = new Set<Id>();
+        Set<Id> ownerIds = new Set<Id>();
+
+        for (Transaction__c txn : txns) {
+            if (isProfitDistributionTransaction(txn)) {
+                distributions.add(txn);
+                assetIds.add(txn.Shared_Asset__c);
+                ownerIds.add(txn.Owner__c);
+            }
+        }
+
+        if (distributions.isEmpty()) {
+            return;
+        }
+
+        Map<String, List<Decimal>> openPayoutAmountsByAssetOwnerKey = new Map<String, List<Decimal>>();
+        for (Payout__c payout : [
+            SELECT Owner__c, Amount__c, Transaction__r.Shared_Asset__c
+            FROM Payout__c
+            WHERE Is_Paid__c = false
+                AND Payment_Transaction__c = null
+                AND Owner__c IN :ownerIds
+                AND Transaction__r.Shared_Asset__c IN :assetIds
+            ORDER BY Transaction__r.Transaction_Date__c ASC, CreatedDate ASC
+        ]) {
+            String key = buildAssetOwnerKey(payout.Transaction__r.Shared_Asset__c, payout.Owner__c);
+            if (!openPayoutAmountsByAssetOwnerKey.containsKey(key)) {
+                openPayoutAmountsByAssetOwnerKey.put(key, new List<Decimal>());
+            }
+            openPayoutAmountsByAssetOwnerKey.get(key).add(payout.Amount__c);
+        }
+
+        for (Transaction__c txn : distributions) {
+            String key = buildAssetOwnerKey(txn.Shared_Asset__c, txn.Owner__c);
+            List<Decimal> openAmounts = openPayoutAmountsByAssetOwnerKey.get(key);
+            if (!canFullyAllocate(txn.Amount__c, openAmounts)) {
+                txn.Amount__c.addError('Profit distribution must exactly match one or more unpaid payouts for this owner and asset.');
+            }
+        }
+    }
+
+    private static Boolean canFullyAllocate(Decimal amount, List<Decimal> openAmounts) {
+        if (amount == null || amount <= 0 || openAmounts == null || openAmounts.isEmpty()) {
+            return false;
+        }
+
+        Decimal remainingAmount = amount;
+        for (Decimal openAmount : openAmounts) {
+            if (openAmount == null || openAmount > remainingAmount) {
+                continue;
+            }
+            remainingAmount -= openAmount;
+            if (remainingAmount == 0) {
+                return true;
+            }
+        }
+        return remainingAmount == 0;
+    }
+
+    private static void incrementAmount(Map<Id, Decimal> totalsById, Id recordId, Decimal amount) {
+        Decimal currentTotal = totalsById.get(recordId);
+        if (currentTotal == null) {
+            currentTotal = 0;
+        }
+        totalsById.put(recordId, currentTotal + amount);
     }
 }

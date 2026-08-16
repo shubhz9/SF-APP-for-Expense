@@ -46,6 +46,7 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
         service.applyDirection((List<Transaction__c>) getRecords());
         service.prepareRelatedRecords((List<Transaction__c>) getRecords());
         this.validateTransactions((List<Transaction__c>) getRecords());
+        service.validateTransactionContexts((List<Transaction__c>) getRecords());
     }
 
     public override void onAfterInsert(){
@@ -88,7 +89,9 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
         TransactionService service = new TransactionService();
         service.applyDirection((List<Transaction__c>) getRecords());
         service.prepareRelatedRecords((List<Transaction__c>) getRecords());
-        this.validateTransactions(this.getChangedTransactions(existingRecords));
+        List<Transaction__c> changedTransactions = this.getChangedTransactions(existingRecords);
+        this.validateTransactions(changedTransactions);
+        service.validateTransactionContexts(changedTransactions, this.getOldTransactionsById(existingRecords));
     }
 
     public void validateTransactions() {
@@ -106,6 +109,15 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
             if (String.isBlank(txn.Type__c)) {
                 txn.Type__c.addError('Transaction type is required.');
                 continue;
+            }
+
+            if (!TransactionTypeConfig.isSupported(txn.Type__c)) {
+                txn.Type__c.addError('Unsupported transaction type.');
+                continue;
+            }
+
+            if (TransactionTypeConfig.requiresAsset(txn.Type__c) && txn.Shared_Asset__c == null) {
+                txn.Shared_Asset__c.addError('Asset is required for this transaction type.');
             }
 
             if (TransactionService.requiresOwner(txn.Type__c) && txn.Owner__c == null) {
