@@ -9,6 +9,7 @@ public with sharing class TransactionTypeConfig {
         public Boolean ownerContribution { get; private set; }
         public Boolean loanPrincipalRepayment { get; private set; }
         public Boolean profitDistribution { get; private set; }
+        public Boolean expenseAllocation { get; private set; }
 
         private TransactionTypeRule(
             String typeName,
@@ -19,7 +20,8 @@ public with sharing class TransactionTypeConfig {
             Boolean generatesPayout,
             Boolean ownerContribution,
             Boolean loanPrincipalRepayment,
-            Boolean profitDistribution
+            Boolean profitDistribution,
+            Boolean expenseAllocation
         ) {
             this.typeName = typeName;
             this.direction = direction;
@@ -30,6 +32,7 @@ public with sharing class TransactionTypeConfig {
             this.ownerContribution = ownerContribution;
             this.loanPrincipalRepayment = loanPrincipalRepayment;
             this.profitDistribution = profitDistribution;
+            this.expenseAllocation = expenseAllocation;
         }
     }
 
@@ -78,6 +81,11 @@ public with sharing class TransactionTypeConfig {
         return rule != null && rule.profitDistribution;
     }
 
+    public static Boolean generatesExpenseAllocation(String transactionType) {
+        TransactionTypeRule rule = ruleFor(transactionType);
+        return rule != null && rule.expenseAllocation;
+    }
+
     public static Set<String> ownerContributionTypes() {
         Set<String> typeNames = new Set<String>();
         for (String typeName : RULES_BY_TYPE.keySet()) {
@@ -90,18 +98,18 @@ public with sharing class TransactionTypeConfig {
 
     private static Map<String, TransactionTypeRule> buildRules() {
         Map<String, TransactionTypeRule> rules = new Map<String, TransactionTypeRule>();
-        addRule(rules, 'Down_Payment', 'Inward', true, true, false, false, true, false, false);
-        addRule(rules, 'Owner_Contribution', 'Inward', true, true, false, false, true, false, false);
-        addRule(rules, 'Loan_Disbursement', 'Inward', true, false, false, false, false, false, false);
-        addRule(rules, 'Income_From_Asset', 'Inward', true, false, false, true, false, false, false);
-        addRule(rules, 'Return', 'Inward', true, false, false, true, false, false, false);
-        addRule(rules, 'Other_Income', 'Inward', true, false, false, false, false, false, false);
-        addRule(rules, 'Loan_Repayment', 'Outward', true, false, true, false, false, true, false);
-        addRule(rules, 'Interest_Payment', 'Outward', true, false, true, false, false, false, false);
-        addRule(rules, 'Maintenance_Expense', 'Outward', true, false, false, false, false, false, false);
-        addRule(rules, 'Insurance', 'Outward', true, false, false, false, false, false, false);
-        addRule(rules, 'Profit_Distribution', 'Outward', true, true, false, false, false, false, true);
-        addRule(rules, 'Other_Expense', 'Outward', true, false, false, false, false, false, false);
+        addRule(rules, 'Down_Payment', 'Inward', true, true, false, false, true, false, false, false);
+        addRule(rules, 'Owner_Contribution', 'Inward', true, true, false, false, true, false, false, false);
+        addRule(rules, 'Loan_Disbursement', 'Inward', true, false, false, false, false, false, false, false);
+        addRule(rules, 'Income_From_Asset', 'Inward', true, false, false, true, false, false, false, false);
+        addRule(rules, 'Return', 'Inward', true, false, false, true, false, false, false, false);
+        addRule(rules, 'Other_Income', 'Inward', true, false, false, false, false, false, false, false);
+        addRule(rules, 'Loan_Repayment', 'Outward', true, false, true, false, false, true, false, false);
+        addRule(rules, 'Interest_Payment', 'Outward', true, false, true, false, false, false, false, false);
+        addRule(rules, 'Maintenance_Expense', 'Outward', true, false, false, false, false, false, false, true);
+        addRule(rules, 'Insurance', 'Outward', true, false, false, false, false, false, false, true);
+        addRule(rules, 'Profit_Distribution', 'Outward', true, true, false, false, false, false, true, false);
+        addRule(rules, 'Other_Expense', 'Outward', true, false, false, false, false, false, false, true);
         return rules;
     }
 
@@ -115,7 +123,8 @@ public with sharing class TransactionTypeConfig {
         Boolean generatesPayout,
         Boolean ownerContribution,
         Boolean loanPrincipalRepayment,
-        Boolean profitDistribution
+        Boolean profitDistribution,
+        Boolean expenseAllocation
     ) {
         rules.put(
             typeName,
@@ -128,7 +137,8 @@ public with sharing class TransactionTypeConfig {
                 generatesPayout,
                 ownerContribution,
                 loanPrincipalRepayment,
-                profitDistribution
+                profitDistribution,
+                expenseAllocation
             )
         );
     }

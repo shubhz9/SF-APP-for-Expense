@@ -16,6 +16,9 @@ public with sharing class TransactionService implements IService {
         void validateTransactionContexts(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void processIncomeAndReturnTransactions(List<Transaction__c> newTxns);
         void processIncomeAndReturnTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
+        void processExpenseTransactions(List<Transaction__c> newTxns);
+        void processExpenseTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
+        void deleteExpenseAllocations(List<Transaction__c> oldTxns);
         void processProfitDistributionTransactions(List<Transaction__c> newTxns);
         void processProfitDistributionTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
         void refreshRelatedRollups(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById);
@@ -165,6 +168,107 @@ public with sharing class TransactionService implements IService {
 
     public void processProfitDistributionTransactions(List<Transaction__c> newTxns) {
         processProfitDistributionTransactions(newTxns, null);
+    }
+
+    public void processExpenseTransactions(List<Transaction__c> newTxns) {
+        processExpenseTransactions(newTxns, null);
+    }
+
+    public void processExpenseTransactions(List<Transaction__c> newTxns, Map<Id, Transaction__c> oldTxnsById) {
+        if (newTxns == null || newTxns.isEmpty()) {
+            return;
+        }
+
+        List<Transaction__c> eligible = new List<Transaction__c>();
+        Set<Id> txnIdsToDeleteAllocations = new Set<Id>();
+
+        for (Transaction__c txn : newTxns) {
+            Boolean shouldProcess = true;
+            if (oldTxnsById != null && txn.Id != null && oldTxnsById.containsKey(txn.Id)) {
+                Transaction__c oldTxn = oldTxnsById.get(txn.Id);
+                shouldProcess =
+                    txn.Type__c != oldTxn.Type__c ||
+                    txn.Amount__c != oldTxn.Amount__c ||
+                    txn.Shared_Asset__c != oldTxn.Shared_Asset__c ||
+                    txn.Owner__c != oldTxn.Owner__c;
+            }
+
+            if (!shouldProcess) {
+                continue;
+            }
+
+            if (oldTxnsById != null && txn.Id != null) {
+                txnIdsToDeleteAllocations.add(txn.Id);
+            }
+
+            if (isExpenseAllocationTransaction(txn)) {
+                eligible.add(txn);
+            }
+        }
+
+        if (eligible.isEmpty() && txnIdsToDeleteAllocations.isEmpty()) {
+            return;
+        }
+
+        Set<Id> assetIds = new Set<Id>();
+        for (Transaction__c txn : eligible) {
+            assetIds.add(txn.Shared_Asset__c);
+        }
+
+        Map<Id, List<Asset_Ownership__c>> ownershipByAssetId = new Map<Id, List<Asset_Ownership__c>>();
+        for (Asset_Ownership__c ownership : AssetOwnershipSelector.newInstance().selectBySharedAssets(assetIds)) {
+            if (!ownershipByAssetId.containsKey(ownership.Shared_Asset__c)) {
+                ownershipByAssetId.put(ownership.Shared_Asset__c, new List<Asset_Ownership__c>());
+            }
+            ownershipByAssetId.get(ownership.Shared_Asset__c).add(ownership);
+        }
+
+        if (!txnIdsToDeleteAllocations.isEmpty()) {
+            deleteExpenseAllocationsByTransactionIds(txnIdsToDeleteAllocations);
+        }
+
+        List<Expense_Allocation__c> allocationsToInsert = new List<Expense_Allocation__c>();
+        for (Transaction__c txn : eligible) {
+            List<Asset_Ownership__c> owners = ownershipByAssetId.get(txn.Shared_Asset__c);
+            if (owners == null || owners.isEmpty()) {
+                continue;
+            }
+
+            for (Asset_Ownership__c ownership : owners) {
+                Decimal expectedAmount = (txn.Amount__c * ownership.Ownership_Percentage__c) / 100;
+                Decimal paidAmount = txn.Owner__c == ownership.Owner__c ? txn.Amount__c : 0;
+                Decimal netAmount = paidAmount - expectedAmount;
+                allocationsToInsert.add(new Expense_Allocation__c(
+                    Transaction__c = txn.Id,
+                    Shared_Asset__c = txn.Shared_Asset__c,
+                    Owner__c = ownership.Owner__c,
+                    Ownership_Percentage__c = ownership.Ownership_Percentage__c,
+                    Expected_Amount__c = expectedAmount,
+                    Paid_Amount__c = paidAmount,
+                    Net_Amount__c = netAmount,
+                    Status__c = netAmount > 0 ? 'Receivable' : (netAmount < 0 ? 'Payable' : 'Settled')
+                ));
+            }
+        }
+
+        if (!allocationsToInsert.isEmpty()) {
+            insert allocationsToInsert;
+        }
+    }
+
+    public void deleteExpenseAllocations(List<Transaction__c> oldTxns) {
+        if (oldTxns == null || oldTxns.isEmpty()) {
+            return;
+        }
+
+        Set<Id> expenseTxnIds = new Set<Id>();
+        for (Transaction__c txn : oldTxns) {
+            if (txn != null && txn.Id != null && TransactionTypeConfig.generatesExpenseAllocation(txn.Type__c)) {
+                expenseTxnIds.add(txn.Id);
+            }
+        }
+
+        deleteExpenseAllocationsByTransactionIds(expenseTxnIds);
     }
 
     public void processProfitDistributionTransactions(
@@ -571,6 +675,29 @@ public with sharing class TransactionService implements IService {
             txn.Amount__c > 0 &&
             txn.Shared_Asset__c != null &&
             txn.Owner__c != null;
+    }
+
+    private static Boolean isExpenseAllocationTransaction(Transaction__c txn) {
+        return txn.Type__c != null &&
+            txn.Amount__c != null &&
+            txn.Shared_Asset__c != null &&
+            TransactionTypeConfig.generatesExpenseAllocation(txn.Type__c);
+    }
+
+    private static void deleteExpenseAllocationsByTransactionIds(Set<Id> transactionIds) {
+        if (transactionIds == null || transactionIds.isEmpty()) {
+            return;
+        }
+
+        List<Expense_Allocation__c> allocationsToDelete = [
+            SELECT Id
+            FROM Expense_Allocation__c
+            WHERE Transaction__c IN :transactionIds
+        ];
+
+        if (!allocationsToDelete.isEmpty()) {
+            delete allocationsToDelete;
+        }
     }
 
     private static void validateAssetsAreReady(List<Transaction__c> txns) {

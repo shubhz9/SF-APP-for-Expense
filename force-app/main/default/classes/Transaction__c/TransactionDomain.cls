@@ -52,6 +52,7 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
     public override void onAfterInsert(){
         TransactionService service = new TransactionService();
         service.processIncomeAndReturnTransactions((List<Transaction__c>) getRecords());
+        service.processExpenseTransactions((List<Transaction__c>) getRecords());
         service.processProfitDistributionTransactions((List<Transaction__c>) getRecords());
         service.refreshRelatedRollups((List<Transaction__c>) getRecords(), (Map<Id, Transaction__c>) null);
     }
@@ -63,6 +64,10 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
     public override void onAfterUpdate(Map<Id, SObject> existingRecords){
         TransactionService service = new TransactionService();
         service.processIncomeAndReturnTransactions(
+            (List<Transaction__c>) getRecords(),
+            this.getOldTransactionsById(existingRecords)
+        );
+        service.processExpenseTransactions(
             (List<Transaction__c>) getRecords(),
             this.getOldTransactionsById(existingRecords)
         );
@@ -78,6 +83,7 @@ public inherited sharing class TransactionDomain extends fflib_SObjectDomain imp
 
     public override void onAfterDelete(){
         TransactionService service = new TransactionService();
+        service.deleteExpenseAllocations((List<Transaction__c>) getRecords());
         service.refreshRelatedRollups((List<Transaction__c>) null, (List<Transaction__c>) getRecords());
     }
 

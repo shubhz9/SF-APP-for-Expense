@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Shared_Asset__c</fullName>
+    <label>Shared Asset</label>
+    <type>Lookup</type>
+    <referenceTo>Shared_Asset__c</referenceTo>
+    <relationshipLabel>Expense Allocations</relationshipLabel>
+    <relationshipName>Expense_Allocations</relationshipName>
+</CustomField>
